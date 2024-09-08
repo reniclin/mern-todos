@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.basic-button {
+  @apply bg-violet-600 text-slate-50 rounded-lg p-2 text-xs;
+  @apply hover:bg-violet-700 active:bg-violet-800;
+}
