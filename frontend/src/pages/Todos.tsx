@@ -72,14 +72,12 @@ function TodoElement(props: { todo: Todo; children?: React.ReactNode }) {
       className={`flex w-full border-b-gray-200 border-b py-4 ${
         deletedState && 'hidden'
       }`}
+      onClick={() => {
+        setIsShowDetails((prev: boolean) => !prev);
+      }}
     >
       {isShowDetails ? (
-        <div
-          className='flex flex-col items-start justify-center'
-          onClick={() => {
-            setIsShowDetails((prev: boolean) => !prev);
-          }}
-        >
+        <div className='flex flex-col items-start justify-center'>
           <p className='font-bold'>{category}</p>
           <p>{title}</p>
           <p className='font-light'>{description}</p>
@@ -105,18 +103,19 @@ function TodoElement(props: { todo: Todo; children?: React.ReactNode }) {
             type='checkbox'
             className='h-4 w-4 text-violet-500'
             checked={finishedState}
+            onClick={(e: React.MouseEvent<HTMLInputElement>) => {
+              e.stopPropagation();
+            }}
             onChange={handleCheckboxChange}
           />
-          <p
-            onClick={() => {
-              setIsShowDetails((prev: boolean) => !prev);
-            }}
-            className={finishedState ? 'line-through text-gray-600' : ''}
-          >
+          <p className={finishedState ? 'line-through text-gray-600' : ''}>
             {title}
           </p>
           <button
-            onClick={() => setDeletedState(true)}
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+              e.stopPropagation();
+              setDeletedState(true);
+            }}
             className='basic-button ml-auto'
           >
             Delete

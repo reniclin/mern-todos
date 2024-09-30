@@ -1,6 +1,18 @@
 import express from 'express';
 import dayjs from 'dayjs';
-import Todo from '../models/todoModel';
+import pool from '../models/awsPostgreSqlDb';
+import { SqlTodo } from '../models/todoSqlType';
+
+function snakeToCamel(obj: any) {
+  const newObj: any = {};
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+      newObj[camelKey] = obj[key];
+    }
+  }
+  return newObj;
+}
 
 const router = express.Router();
 
@@ -8,27 +20,31 @@ const router = express.Router();
  * API for add 1 toto item.
  **/
 router.post('/', async (req, res) => {
-  console.log('[todo] POST / ', req.body);
+  console.log('[todoSql] POST / ', req.body);
 
   try {
-    const { title, description, category, isFinished, dueDateUtc } = req.body;
+    const { title, description, category, dueDateUtc, isFinished }: SqlTodo =
+      req.body;
 
     if (title == null || typeof title !== 'string' || title.length === 0) {
       res.status(400).json({ error: 'title is required for create new todo' });
       return;
     }
 
-    const newTodo = new Todo({
-      title,
-      description,
-      category,
-      isFinished,
-      dueDateUtc,
-    });
+    const newTodo = await pool.query(
+      `INSERT INTO todos (title, description, category, due_date_utc, is_finished)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        title,
+        description ?? '',
+        category ?? 'None',
+        dueDateUtc,
+        isFinished ?? false,
+      ]
+    );
 
-    await newTodo.save();
-
-    res.status(201).json(newTodo);
+    res.status(201).json(newTodo.rows[0]);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -44,12 +60,13 @@ router.post('/', async (req, res) => {
  * API for get all todo items.
  **/
 router.get('/', async (req, res) => {
-  console.log('[todo] GET / ', req.body);
+  console.log('[todoSql] GET / ', req.body);
 
   try {
-    const todos = await Todo.find({});
+    const allTodos = await pool.query('SELECT * FROM todos');
+    const todosCamelCase = allTodos.rows.map((todo: any) => snakeToCamel(todo));
 
-    res.json(todos);
+    res.status(200).json(todosCamelCase);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -57,7 +74,7 @@ router.get('/', async (req, res) => {
       console.error(error);
     }
 
-    res.status(500).json({ error: 'Failed to fetch todos' });
+    res.status(500).json({ error: 'Server Error' });
   }
 });
 
@@ -66,7 +83,7 @@ router.get('/', async (req, res) => {
  **/
 router.get('/by-due-date', async (req, res) => {
   const { dueDateUtc } = req.query;
-  console.log(`[todo] GET /by-due-date, dueDateUtc:`, dueDateUtc, req.body);
+  console.log(`[todoSql] GET /by-due-date, dueDateUtc:`, dueDateUtc, req.body);
 
   if (dueDateUtc == null || typeof dueDateUtc !== 'string') {
     res.status(400).json({ error: 'dueDate is required' });
@@ -77,12 +94,12 @@ router.get('/by-due-date', async (req, res) => {
     const startOfDayUtc = dayjs(dueDateUtc).startOf('day').toISOString();
     const endOfDayUtc = dayjs(dueDateUtc).endOf('day').toISOString();
 
-    // Get all todos within this day
-    const todos = await Todo.find({
-      dueDateUtc: { $gte: startOfDayUtc, $lte: endOfDayUtc },
-    });
+    const todosByDueDate = await pool.query(
+      'SELECT * FROM todos WHERE due_date_utc BETWEEN $1 AND $2',
+      [startOfDayUtc, endOfDayUtc]
+    );
 
-    res.json(todos);
+    res.json(todosByDueDate.rows);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -99,7 +116,7 @@ router.get('/by-due-date', async (req, res) => {
  **/
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  console.log(`[todo] GET id: ${id} `, req.body);
+  console.log(`[todoSql] GET id: ${id} `, req.body);
 
   if (id == null || typeof id !== 'string' || id.length === 0) {
     res.status(400).json({ error: 'id is required' });
@@ -107,14 +124,14 @@ router.get('/:id', async (req, res) => {
   }
 
   try {
-    const todo = await Todo.findById(id);
+    const todo = await pool.query('SELECT * FROM todos WHERE id = $1', [id]);
 
-    if (!todo) {
+    if (todo.rows.length === 0) {
       res.status(404).json({ error: 'Todo not found' });
       return;
     }
 
-    res.json(todo);
+    res.json(todo.rows[0]);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -139,44 +156,48 @@ router.patch('/:id', async (req, res) => {
   }
 
   try {
-    const { title, description, category, isFinished, dueDateUtc } = req.body;
+    const {
+      title,
+      description,
+      category,
+      isFinished,
+      dueDateUtc,
+    }: Partial<SqlTodo> = req.body;
 
-    // Create new ojbect for update, only update exist fields.
-    let updateFields: any = {};
+    // Query current value by id
+    const currentTodo = await pool.query('SELECT * FROM todos WHERE id = $1', [
+      id,
+    ]);
 
-    if (title != null) {
-      updateFields.title = title;
-    }
-
-    if (dueDateUtc != null) {
-      updateFields.dueDateUtc = dueDateUtc;
-    }
-
-    if (description != null) {
-      updateFields.description = description;
-    }
-
-    if (category != null) {
-      updateFields.category = category;
-    }
-
-    if (isFinished != null) {
-      updateFields.isFinished = isFinished;
-    }
-
-    updateFields.updatedAtUtc = new Date().toISOString();
-
-    //  Use `findByIdAndUpdate` to update the new fields.，
-    const updatedTodo = await Todo.findByIdAndUpdate(id, updateFields, {
-      new: true,
-    });
-
-    if (!updatedTodo) {
+    if (currentTodo.rows.length === 0) {
       res.status(404).json({ error: 'Todo not found' });
       return;
     }
 
-    res.json(updatedTodo);
+    const todo = currentTodo.rows[0];
+
+    const updatedTodo = await pool.query(
+      `UPDATE todos
+       SET
+         title = $1,
+         description = $2,
+         category = $3,
+         is_finished = $4,
+         due_date_utc = $5,
+         updated_at_utc = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [
+        title ?? todo.title, // Keep original value if no new value
+        description ?? todo.description, // Keep original value if no new value
+        category ?? todo.category, // Keep original value if no new value
+        isFinished ?? todo.is_finished, // Keep original value if no new value
+        dueDateUtc ?? todo.due_date_utc, // Keep original value if no new value
+        id,
+      ]
+    );
+
+    res.json(updatedTodo.rows[0]);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -193,7 +214,7 @@ router.patch('/:id', async (req, res) => {
  **/
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  console.log(`[todo] DELETE id: ${id} `, req.body);
+  console.log(`[todoSql] DELETE id: ${id} `, req.body);
 
   if (id == null || typeof id !== 'string' || id.length === 0) {
     res.status(400).json({ error: 'id is required' });
@@ -201,14 +222,17 @@ router.delete('/:id', async (req, res) => {
   }
 
   try {
-    const deletedTodo = await Todo.findByIdAndDelete(id);
+    const deleteTodo = await pool.query(
+      'DELETE FROM todos WHERE id = $1 RETURNING *',
+      [id]
+    );
 
-    if (!deletedTodo) {
+    if (deleteTodo.rows.length === 0) {
       res.status(404).json({ error: 'Todo not found' });
       return;
     }
 
-    res.json(deletedTodo);
+    res.json(deleteTodo.rows[0]);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);

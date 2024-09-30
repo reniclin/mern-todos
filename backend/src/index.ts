@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 
 import todoRouter from './routes/todoRouter';
+import todoSqlRouter from './routes/todoSqlRouter';
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use(cors());
 // );
 
 app.use('/todo', todoRouter);
+app.use('/todoSql', todoSqlRouter);
 
 app.get('/', (req, res) => {
   res.status(200).send('Hello, This is TypeScript with Express!');
@@ -28,7 +30,7 @@ app.get('/', (req, res) => {
 mongoose
   .connect(MONGODB_URL, MONGODB_CONNECT_OPTIONS)
   .then(() => {
-    console.log('App is connected to database.');
+    console.log('App is connected to MongoDB.');
 
     app.listen(APP_PORT, () => {
       console.log(`Server is running on http://localhost:${APP_PORT}`);
