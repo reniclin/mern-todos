@@ -7,7 +7,10 @@ function snakeToCamel(obj: any) {
   const newObj: any = {};
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
-      const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+      let camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+      if (camelKey === 'id') {
+        camelKey = '_id';
+      }
       newObj[camelKey] = obj[key];
     }
   }
@@ -44,7 +47,7 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    res.status(201).json(newTodo.rows[0]);
+    res.status(201).json(snakeToCamel(newTodo.rows[0]));
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -99,7 +102,11 @@ router.get('/by-due-date', async (req, res) => {
       [startOfDayUtc, endOfDayUtc]
     );
 
-    res.json(todosByDueDate.rows);
+    const todosCamelCase = todosByDueDate.rows.map((todo: any) =>
+      snakeToCamel(todo)
+    );
+
+    res.json(todosCamelCase);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -131,7 +138,7 @@ router.get('/:id', async (req, res) => {
       return;
     }
 
-    res.json(todo.rows[0]);
+    res.json(snakeToCamel(todo.rows[0]));
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -197,7 +204,7 @@ router.patch('/:id', async (req, res) => {
       ]
     );
 
-    res.json(updatedTodo.rows[0]);
+    res.json(snakeToCamel(updatedTodo.rows[0]));
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
@@ -232,7 +239,7 @@ router.delete('/:id', async (req, res) => {
       return;
     }
 
-    res.json(deleteTodo.rows[0]);
+    res.json(snakeToCamel(deleteTodo.rows[0]));
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);

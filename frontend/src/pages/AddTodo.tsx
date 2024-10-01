@@ -1,47 +1,60 @@
-import { useMutation, UseMutationResult } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { ChangeEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { API_ADD_TODO } from '../config/api';
+import { createTodo, DatabaseOptions } from '../utilities/todoApi';
+import {
+  localDatetimeStringToUtcString,
+  utcStringTolocalDateTimeString,
+} from '../utilities/localUtcHelper';
 
 export default function AddTodo() {
   const navigate = useNavigate();
+  const [selectedDb, setSelectedDb] = useState<DatabaseOptions>(
+    DatabaseOptions.MongoDb
+  );
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [dueDate, setDueDate] = useState(() =>
-    new Date().toISOString().slice(0, 16)
+    utcStringTolocalDateTimeString()
   );
 
-  const useCreateTodoMutation = (): UseMutationResult<
-    Todo,
-    Error,
-    Todo,
-    unknown
-  > => {
-    return useMutation<Todo, Error, Todo, unknown>({
-      mutationFn: createTodo,
-      onSuccess: (data: Todo) => {
-        console.log('Todo created successfully:', data);
-        navigate('/todos');
-      },
-      onError: (error: Error) => {
-        console.error('Error creating todo:', error);
-        navigate('/todos');
-      },
-    });
-  };
-
-  const createTodoMutation = useCreateTodoMutation();
+  const createTodoMutation = useMutation({
+    mutationFn: async ({
+      todo,
+      database,
+    }: {
+      todo: Todo;
+      database: DatabaseOptions;
+    }) => {
+      return await createTodo(todo, database);
+    },
+    onSuccess: (data: Todo) => {
+      console.log('Todo created successfully:', data);
+      navigate('/todos');
+    },
+    onError: (error: Error) => {
+      console.error('Error creating todo:', error);
+      navigate('/todos');
+    },
+  });
 
   const handleCreateTodo = () => {
     createTodoMutation.mutate({
-      title,
-      description,
-      category,
-      dueDateUtc: new Date(dueDate).toISOString(),
-      isFinished: false,
+      todo: {
+        title,
+        description,
+        category,
+        dueDateUtc: localDatetimeStringToUtcString(dueDate),
+        isFinished: false,
+      },
+      database: selectedDb,
     });
+  };
+
+  const handleSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedDb(event.target.value as DatabaseOptions);
   };
 
   const handleCategoryChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +84,20 @@ export default function AddTodo() {
         </button>
       </div>
       <h1 className='font-mono text-lg'>Create new Todo</h1>
+
+      <div className='flex flex-col justify-start items-center w-11/12'>
+        <div className='flex w-full gap-4 py-2'>
+          <label htmlFor='databases'>Database:</label>
+          <select
+            id='databases'
+            value={selectedDb}
+            onChange={handleSelectChange}
+          >
+            <option value={DatabaseOptions.MongoDb}>MongoDb</option>
+            <option value={DatabaseOptions.PostgreSql}>PostgreSql</option>
+          </select>
+        </div>
+      </div>
 
       <div className='flex flex-col justify-start items-center w-11/12'>
         <div className='flex w-full gap-4 py-2'>
@@ -121,20 +148,4 @@ export default function AddTodo() {
       </div>
     </div>
   );
-}
-
-async function createTodo(todo: Todo): Promise<Todo> {
-  const response = await fetch(API_ADD_TODO, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(todo),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to create new todo: ${response.statusText}`);
-  }
-
-  return await response.json();
 }

@@ -11,4 +11,17 @@ html, body, #root {
 .basic-button {
   @apply bg-violet-600 text-slate-50 rounded-lg p-2 text-xs;
   @apply hover:bg-violet-700 active:bg-violet-800;
+  padding: 0.9em 1em;
+}
+
+.blue-button {
+  @apply bg-blue-500 text-slate-50 rounded-lg p-2 text-xs;
+  @apply hover:bg-blue-600 active:bg-blue-700;
+  padding: 0.9em 1em;
+}
+
+.red-button {
+  @apply bg-red-500 text-slate-50 rounded-lg p-2 text-xs;
+  @apply hover:bg-red-600 active:bg-red-700;
+  padding: 0.9em 1em;
 }
